@@ -1,0 +1,8 @@
+{
+  "name": "Sigeon OS 1.01",
+  "description": "A web-based OS inspired by Windows 1.0, featuring MS-PEX Executive, Calculator, Paint, and more, with a custom mobile device emulator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

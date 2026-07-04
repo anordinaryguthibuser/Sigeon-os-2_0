@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User presence tracking doc",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "lastActive": { "type": "object", "format": "date-time" }
+      },
+      "required": ["username", "lastActive"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A live chat message sent by a user",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "object", "format": "date-time" }
+      },
+      "required": ["username", "text", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Presence documents indexed by lowercase username"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "List of global messages ordered by timestamp"
+    }
+  }
+}

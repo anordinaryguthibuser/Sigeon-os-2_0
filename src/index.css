@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Windows101SystemFont";
+  src: url("./windows-1-01-system-font-1.otf");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@theme {
+  --font-sans: "Windows101SystemFont", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Windows101SystemFont", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  font-family: "Windows101SystemFont", monospace;
+  image-rendering: pixelated;
+}
