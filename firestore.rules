@@ -22,11 +22,12 @@ service cloud.firestore {
     // Validation for User entity presence documents
     function isValidUser(data) {
       return data.keys().hasAll(['username', 'lastActive'])
-        && data.keys().size() == 2
+        && (data.keys().size() == 2 || (data.keys().size() == 3 && data.keys().hasAll(['password'])))
         && data.username is string
         && data.username.size() >= 2
         && data.username.size() <= 20
-        && data.lastActive is timestamp;
+        && data.lastActive is timestamp
+        && (!data.keys().hasAll(['password']) || (data.password is string && data.password.size() >= 4 && data.password.size() <= 128));
     }
 
     // Validation for Message entity

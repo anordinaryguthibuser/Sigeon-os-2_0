@@ -6,6 +6,7 @@ import {
   isUsernameAvailable, 
   registerUsername, 
   updateUserPresence,
+  getUserDoc,
   ChatMessage,
   UserPresence
 } from '../lib/firebase';
@@ -15,6 +16,7 @@ export default function SigLiveChat() {
     localStorage.getItem('siglivechat_username')
   );
   const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
@@ -73,10 +75,18 @@ export default function SigLiveChat() {
     }
   }, [messages]);
 
+  // De-obfuscates scrambled developer secret: "rainbow_sigeonpexepex_7726"
+  const getDevSecret = () => {
+    const scrambled = "wfnsgt|dxnljtsuj}juj}d<<7;";
+    return scrambled.split('').map(c => String.fromCharCode(c.charCodeAt(0) - 5)).join('');
+  };
+
   // Handle register/login username
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = usernameInput.trim();
+    const cleanPassword = passwordInput.trim();
+
     if (!cleanName) {
       setUsernameError("Username cannot be empty");
       return;
@@ -93,12 +103,28 @@ export default function SigLiveChat() {
       return;
     }
 
+    if (!cleanPassword) {
+      setUsernameError("Password cannot be empty");
+      return;
+    }
+
+    if (cleanPassword.length < 4) {
+      setUsernameError("Password must be at least 4 characters");
+      return;
+    }
+
+    const devSecret = getDevSecret();
+
     if (cleanName.toLowerCase() === 'developer2') {
       const isRainbow = localStorage.getItem('siglivechat_is_rainbow') === 'true';
       if (!isRainbow) {
-        setShowDevVerification(true);
-        setUsernameError(null);
-        return;
+        if (cleanPassword === devSecret) {
+          localStorage.setItem('siglivechat_is_rainbow', 'true');
+        } else {
+          setShowDevVerification(true);
+          setUsernameError(null);
+          return;
+        }
       }
     }
 
@@ -106,22 +132,47 @@ export default function SigLiveChat() {
     setUsernameError(null);
 
     try {
-      const isAvailable = await isUsernameAvailable(cleanName);
-      if (!isAvailable) {
-        setUsernameError("Username already taken! Please choose another.");
-        setCheckingUsername(false);
-        return;
-      }
+      // Get user doc from Firebase
+      const userDoc = await getUserDoc(cleanName);
 
-      const success = await registerUsername(cleanName);
-      if (success) {
-        localStorage.setItem('siglivechat_username', cleanName);
-        if (cleanName.toLowerCase() === 'rainbow_sigeon_7726' || cleanName.toLowerCase() === 'rainbow') {
+      if (userDoc) {
+        // Logging in an existing user
+        if (cleanName.toLowerCase() === 'developer2') {
+          if (cleanPassword !== devSecret) {
+            setUsernameError("Incorrect password for DEVELOPER2");
+            setCheckingUsername(false);
+            return;
+          }
+        } else if (userDoc.password && userDoc.password !== cleanPassword) {
+          setUsernameError("Incorrect password for this username.");
+          setCheckingUsername(false);
+          return;
+        }
+
+        // Connect user
+        localStorage.setItem('siglivechat_username', userDoc.username);
+        if (userDoc.username.toLowerCase() === 'rainbow_sigeon_7726' || userDoc.username.toLowerCase() === 'rainbow' || userDoc.username.toLowerCase() === 'developer2') {
           localStorage.setItem('siglivechat_is_rainbow', 'true');
         }
-        setUsername(cleanName);
+        setUsername(userDoc.username);
       } else {
-        setUsernameError("Registration failed. Please try again.");
+        // Registering a brand new user
+        if (cleanName.toLowerCase() === 'developer2' && cleanPassword !== devSecret) {
+          setUsernameError("DEVELOPER2 username requires developer password.");
+          setCheckingUsername(false);
+          return;
+        }
+
+        const success = await registerUsername(cleanName, cleanPassword);
+        if (success) {
+          localStorage.setItem('siglivechat_username', cleanName);
+          if (cleanName.toLowerCase() === 'rainbow_sigeon_7726' || cleanName.toLowerCase() === 'rainbow' || cleanName.toLowerCase() === 'developer2') {
+            localStorage.setItem('siglivechat_is_rainbow', 'true');
+          }
+          setUsername(cleanName);
+        } else {
+          setUsernameError("Registration failed. Please try again.");
+        }
       }
     } catch (err) {
       console.error(err);
@@ -134,7 +185,8 @@ export default function SigLiveChat() {
   const handleVerifyDev = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanDevName = devNameInput.trim().toLowerCase();
-    if (cleanDevName === 'rainbow_sigeon_7726') {
+    const devSecret = getDevSecret();
+    if (cleanDevName === devSecret.toLowerCase() || cleanDevName === 'rainbow_sigeon_7726') {
       localStorage.setItem('siglivechat_is_rainbow', 'true');
       setShowDevVerification(false);
       setUsernameError(null);
@@ -143,19 +195,18 @@ export default function SigLiveChat() {
       setCheckingUsername(true);
       const cleanName = usernameInput.trim();
       try {
-        const isAvailable = await isUsernameAvailable(cleanName);
-        if (!isAvailable) {
-          setUsernameError("Username already taken! Please choose another.");
-          setCheckingUsername(false);
-          return;
-        }
-
-        const success = await registerUsername(cleanName);
-        if (success) {
-          localStorage.setItem('siglivechat_username', cleanName);
-          setUsername(cleanName);
+        const userDoc = await getUserDoc(cleanName);
+        if (userDoc) {
+          localStorage.setItem('siglivechat_username', userDoc.username);
+          setUsername(userDoc.username);
         } else {
-          setUsernameError("Registration failed. Please try again.");
+          const success = await registerUsername(cleanName, devSecret);
+          if (success) {
+            localStorage.setItem('siglivechat_username', cleanName);
+            setUsername(cleanName);
+          } else {
+            setUsernameError("Registration failed. Please try again.");
+          }
         }
       } catch (err) {
         console.error(err);
@@ -291,13 +342,13 @@ export default function SigLiveChat() {
                   </div>
                 </form>
               ) : (
-                <form onSubmit={handleRegister} className="mt-4 flex flex-col gap-3">
-                  <p className="text-xs font-bold leading-relaxed font-mono">
-                    Welcome to SIGLIVECHAT.pex! Please register a unique username to start chatting with other users online.
+                <form onSubmit={handleRegister} className="mt-4 flex flex-col gap-2">
+                  <p className="text-[10px] font-bold leading-relaxed font-mono">
+                    Welcome to SIGLIVECHAT.pex! Enter a username and password to register or log in.
                   </p>
                   
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold font-mono">ENTER DESIRED USERNAME:</label>
+                    <label className="text-[10px] font-bold font-mono">USERNAME:</label>
                     <input
                       type="text"
                       value={usernameInput}
@@ -305,13 +356,25 @@ export default function SigLiveChat() {
                       placeholder="e.g. Sigeon1"
                       disabled={checkingUsername}
                       maxLength={20}
-                      className="w-full border-2 border-black px-2 py-1 font-mono text-sm bg-white text-black focus:outline-none focus:ring-1 focus:ring-black"
+                      className="w-full border-2 border-black px-2 py-0.5 font-mono text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-black"
                       autoFocus
                     />
                   </div>
 
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold font-mono">PASSWORD:</label>
+                    <input
+                      type="password"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder="Min 4 characters"
+                      disabled={checkingUsername}
+                      className="w-full border-2 border-black px-2 py-0.5 font-mono text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-black"
+                    />
+                  </div>
+
                   {usernameError && (
-                    <div className="text-xs text-red-600 font-bold font-mono border border-red-600 p-1 bg-red-50">
+                    <div className="text-[10px] text-red-600 font-bold font-mono border border-red-600 p-1 bg-red-50">
                       ⚠ {usernameError}
                     </div>
                   )}
@@ -319,9 +382,9 @@ export default function SigLiveChat() {
                   <button
                     type="submit"
                     disabled={checkingUsername}
-                    className="w-full py-1.5 font-bold font-mono text-sm bg-[#00ffff] text-black hover:bg-black hover:text-white border-2 border-black cursor-pointer active:translate-y-0.5 transition-transform"
+                    className="w-full py-1 font-bold font-mono text-xs bg-[#00ffff] text-black hover:bg-black hover:text-white border-2 border-black cursor-pointer active:translate-y-0.5 transition-transform mt-1"
                   >
-                    {checkingUsername ? "CHECKING AVAILABILITY..." : "CONNECT TO SIGCHAT"}
+                    {checkingUsername ? "CHECKING..." : "CONNECT TO SIGCHAT"}
                   </button>
                 </form>
               )}
@@ -352,23 +415,23 @@ export default function SigLiveChat() {
                       <div className="flex items-baseline justify-between">
                         {/* Format requested: [Username]: [Your Message] */}
                         {isDev ? (
-                          <span className="font-bold flex items-center gap-1">
+                          <span className="font-bold flex items-center gap-1 text-xs sm:text-sm">
                             <span className="text-[#ff0000] font-extrabold">{msg.username}</span>
-                            <span className="text-[9px] bg-[#ff0000] text-white font-bold px-1 py-[1.5px] border border-black rounded-sm uppercase tracking-wider scale-90">DEV</span>
+                            <span className="text-[8px] sm:text-[9px] bg-[#ff0000] text-white font-bold px-1 py-[1.5px] border border-black rounded-sm uppercase tracking-wider scale-90">DEV</span>
                             <span className="text-gray-900 font-bold">:</span>
                           </span>
                         ) : (
-                          <span className={`font-bold ${isMe ? 'text-[#0000aa]' : 'text-gray-900'}`}>
+                          <span className={`font-bold text-xs sm:text-sm ${isMe ? 'text-[#0000aa]' : 'text-gray-900'}`}>
                             {msg.username}:
                           </span>
                         )}
                         {msg.timestamp && (
-                          <span className="text-[9px] text-gray-400 font-normal">
+                          <span className="text-[8px] sm:text-[9px] text-gray-400 font-normal">
                             {new Date(msg.timestamp.toMillis()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
                         )}
                       </div>
-                      <p className="text-black break-words select-text font-sans font-medium text-sm mt-0.5">
+                      <p className="text-black break-words select-text font-sans font-medium text-xs sm:text-sm mt-0.5">
                         {msg.text}
                       </p>
                     </div>
@@ -388,11 +451,11 @@ export default function SigLiveChat() {
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 placeholder="Type your message here..."
-                className="flex-1 border-2 border-black bg-white text-black px-2 py-1 font-mono text-sm focus:outline-none"
+                className="flex-1 border-2 border-black bg-white text-black px-2 py-1 font-mono text-xs sm:text-sm focus:outline-none"
               />
               <button
                 type="submit"
-                className="bg-[#00ffff] hover:bg-black hover:text-white text-black border-2 border-black font-bold px-4 py-1 text-sm font-mono cursor-pointer active:scale-95"
+                className="bg-[#00ffff] hover:bg-black hover:text-white text-black border-2 border-black font-bold px-2 sm:px-4 py-1 text-xs sm:text-sm font-mono cursor-pointer active:scale-95"
               >
                 SEND
               </button>

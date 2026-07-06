@@ -6,7 +6,8 @@
       "type": "object",
       "properties": {
         "username": { "type": "string" },
-        "lastActive": { "type": "object", "format": "date-time" }
+        "lastActive": { "type": "object", "format": "date-time" },
+        "password": { "type": "string" }
       },
       "required": ["username", "lastActive"]
     },

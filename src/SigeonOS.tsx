@@ -199,8 +199,8 @@ export default function SigeonOS() {
       width = 280;
       height = 300;
     } else if (appId === 'siglivechat') {
-      width = isComputer ? 460 : 320;
-      height = isComputer ? 400 : 350;
+      width = isComputer ? 460 : 300;
+      height = isComputer ? 400 : 280;
     }
 
     setOsState(prev => ({

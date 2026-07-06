@@ -106,8 +106,31 @@ export async function isUsernameAvailable(username: string): Promise<boolean> {
   }
 }
 
-// Register username
-export async function registerUsername(username: string): Promise<boolean> {
+export interface UserDoc {
+  username: string;
+  lastActive: any;
+  password?: string;
+}
+
+// Get user document by username
+export async function getUserDoc(username: string): Promise<UserDoc | null> {
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return null;
+  const path = `users/${normalized}`;
+  try {
+    const docRef = doc(db, 'users', normalized);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as UserDoc;
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+  }
+}
+
+// Register username with optional password
+export async function registerUsername(username: string, password?: string): Promise<boolean> {
   const normalized = username.trim().toLowerCase();
   const available = await isUsernameAvailable(username);
   if (!available) return false;
@@ -115,10 +138,14 @@ export async function registerUsername(username: string): Promise<boolean> {
   const path = `users/${normalized}`;
   try {
     const docRef = doc(db, 'users', normalized);
-    await setDoc(docRef, {
+    const data: any = {
       username: username.trim(),
       lastActive: serverTimestamp()
-    });
+    };
+    if (password) {
+      data.password = password;
+    }
+    await setDoc(docRef, data);
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
